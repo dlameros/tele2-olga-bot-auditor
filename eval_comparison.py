@@ -8,12 +8,12 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
 
-from eval_metrics import evaluate_predictions, STATUS_MAP
+from eval_metrics import evaluate_predictions
 
 def run_three_way_comparison(test_csv="318_test.csv", total_dataset_size=3200, call_center_capacity=3000):
     """
     Compares Ground Truth (Manual Benchmark) vs Bot Olga vs Deterministic Rule-Based Auditor.
-    Evaluates selection profitability under the 3,200 dataset -> 3,000 call center capacity constraint.
+    Strict factual comparison based on 318 benchmark test dataset.
     """
     if not os.path.exists(test_csv):
         print(f"❌ Файл {test_csv} не найден.")
@@ -28,12 +28,11 @@ def run_three_way_comparison(test_csv="318_test.csv", total_dataset_size=3200, c
     res_olga = evaluate_predictions(y_true, y_olga)
     res_rule = evaluate_predictions(y_true, y_rule)
 
-    # 1. Operational Selection Stats (3,200 incoming calls -> 3,000 capacity)
-    olga_status_counts = pd.Series(y_olga).value_counts().to_dict()
-    rule_status_counts = pd.Series(y_rule).value_counts().to_dict()
+    olga_selected = sum(np.isin(y_olga, [2, 4]))
+    rule_selected = sum(np.isin(y_rule, [2, 4]))
 
-    olga_calls_to_operators = int(round((olga_status_counts.get(2, 0) + olga_status_counts.get(4, 0)) / len(df) * total_dataset_size))
-    rule_calls_to_operators = int(round((rule_status_counts.get(2, 0) + rule_status_counts.get(4, 0)) / len(df) * total_dataset_size))
+    olga_calls_projected = int(round(olga_selected / len(df) * total_dataset_size))
+    rule_calls_projected = int(round(rule_selected / len(df) * total_dataset_size))
 
     print("=" * 85)
     print("📊 СРАВНИТЕЛЬНЫЙ АНАЛИЗ 3-Х СТОРОН: РУЧНАЯ РАЗМЕТКА vs ОЛЬГА vs RULE-BASED АУДИТОР")
@@ -41,11 +40,11 @@ def run_three_way_comparison(test_csv="318_test.csv", total_dataset_size=3200, c
     print(f"Входной поток диалогов ('серая зона') : {total_dataset_size:,} звонков")
     print(f"Лимит мощности колл-центра / операторов : {call_center_capacity:,} звонков/мес")
     print("-" * 85)
-    print(f"{'Показатель эффективности':<40} {'Робот Ольга':<16} {'Rule-Based Аудитор':<18} {'Профит / Выгода':<16}")
+    print(f"{'Показатель эффективности':<40} {'Робот Ольга':<16} {'Rule-Based Аудитор':<18} {'Прирост / Выгода':<16}")
     print("-" * 85)
 
-    print(f"{'Отправлено операторам (S2 + S4)':<40} {olga_calls_to_operators:,} звонков{'':<4} {rule_calls_to_operators:,} звонков{'':<6} {'В рамках 3,000 лимита'}")
-    print(f"{'Автономно отсеяно правилами (S1 + S3)':<40} {total_dataset_size - olga_calls_to_operators:,} звонков{'':<4} {total_dataset_size - rule_calls_to_operators:,} звонков{'':<6} {'0 рублей затрат'}")
+    print(f"{'Отправлено операторам (S2 + S4)':<40} {olga_calls_projected:,} звонков{'':<4} {rule_calls_projected:,} звонков{'':<6} {'В рамках 3,000 лимита'}")
+    print(f"{'Автономно отсеяно правилами (S1 + S3)':<40} {total_dataset_size - olga_calls_projected:,} звонков{'':<4} {total_dataset_size - rule_calls_projected:,} звонков{'':<6} {'0 рублей затрат'}")
 
     r4_olga = res_olga['per_class'][4]['recall'] * 100
     r4_rule = res_rule['per_class'][4]['recall'] * 100

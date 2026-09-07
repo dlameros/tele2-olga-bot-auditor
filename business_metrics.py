@@ -7,76 +7,50 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 def calculate_pure_ai_agent_roi(
-    monthly_churn_population=8000,
+    dataset_size=3200,
+    call_center_capacity=3000,
     avg_call_duration_min=5.0,
-    operator_hourly_rate_rub=450.0,
-    avg_b2b_arpu_rub=1500.0
+    operator_hourly_rate_rub=450.0
 ):
     """
-    Computes Deterministic Rule-Based Auditor Business ROI (0 API costs, 0 Latency).
+    Computes strict factual operational impact for Tele2 Rule-Based Auditor
+    without extrapolations or invented revenue assumptions.
     """
-    # 1. Total Manual Operator Cost (Without Rule Auditor)
-    total_operator_hours_needed = (monthly_churn_population * avg_call_duration_min) / 60.0  # 666.7 hours
-    total_manual_fot_cost_rub = total_operator_hours_needed * operator_hourly_rate_rub      # 300,000 ₽ / month
-    
-    # 2. Rule-Based Auditor Automation Rate
-    # Rule Auditor autonomously filters 85% of non-actionable cases (Status 1, 2, 3) with 0 API cost.
-    rule_autonomous_ratio = 0.85
-    human_vip_escalation_ratio = 0.15
-    
-    calls_handled_by_rules = monthly_churn_population * rule_autonomous_ratio       # 6,800 calls auto-processed
-    calls_handled_by_human = monthly_churn_population * human_vip_escalation_ratio # 1,200 VIP manager calls
-    
-    # 3. Direct Operator Labor Savings
-    hours_saved_by_rules = (calls_handled_by_rules * avg_call_duration_min) / 60.0  # 566.7 hours saved
-    monthly_fot_savings_rub = hours_saved_by_rules * operator_hourly_rate_rub       # 255,000 ₽ / month
-    annual_fot_savings_rub = monthly_fot_savings_rub * 12.0                     # 3,060,000 ₽ / year
-    
-    # 4. Infrastructure Cost (0 API costs - 100% Python/Regex execution)
-    monthly_api_cost_rub = 0.0
+    # Factual filtering ratio from benchmark evaluation (177 / 318 = 55.66%)
+    filtered_ratio = 177.0 / 318.0
+    selected_ratio = 141.0 / 318.0
 
-    # 5. Salvaged B2B Revenue (Rule Auditor catches 4.1x more Manager Escalations)
-    salvaged_b2b_accounts_monthly = monthly_churn_population * 0.261 * 0.446 * 0.35  # ~326 accounts saved
-    monthly_salvaged_mrr_rub = salvaged_b2b_accounts_monthly * avg_b2b_arpu_rub       # ~488,900 ₽ / month
-    annual_salvaged_revenue_rub = monthly_salvaged_mrr_rub * 12.0                      # ~5.87 Million ₽ / year
+    filtered_calls_monthly = int(round(dataset_size * filtered_ratio))   # ~1,781 calls
+    selected_calls_monthly = int(round(dataset_size * selected_ratio))   # ~1,419 calls
 
-    # Total Business Impact
-    total_monthly_economic_impact_rub = monthly_fot_savings_rub + monthly_salvaged_mrr_rub
-    total_annual_economic_impact_rub = total_monthly_economic_impact_rub * 12.0
+    # Labor hours saved from filtering non-actionable calls
+    hours_saved_monthly = (filtered_calls_monthly * avg_call_duration_min) / 60.0  # 148.4 hours
+    monthly_fot_savings_rub = hours_saved_monthly * operator_hourly_rate_rub       # ~66,788 ₽ / month
+    annual_fot_savings_rub = monthly_fot_savings_rub * 12.0                      # ~801,450 ₽ / year
 
     return {
-        "monthly_churn_population": monthly_churn_population,
-        "total_manual_fot_cost_rub": total_manual_fot_cost_rub,
-        "calls_handled_by_rules": calls_handled_by_rules,
-        "calls_handled_by_human": calls_handled_by_human,
-        "hours_saved_by_rules": hours_saved_by_rules,
+        "dataset_size": dataset_size,
+        "call_center_capacity": call_center_capacity,
+        "filtered_calls_monthly": filtered_calls_monthly,
+        "selected_calls_monthly": selected_calls_monthly,
+        "hours_saved_monthly": hours_saved_monthly,
         "monthly_fot_savings_rub": monthly_fot_savings_rub,
         "annual_fot_savings_rub": annual_fot_savings_rub,
-        "monthly_api_cost_rub": monthly_api_cost_rub,
-        "salvaged_b2b_accounts_monthly": salvaged_b2b_accounts_monthly,
-        "monthly_salvaged_mrr_rub": monthly_salvaged_mrr_rub,
-        "annual_salvaged_revenue_rub": annual_salvaged_revenue_rub,
-        "total_monthly_economic_impact_rub": total_monthly_economic_impact_rub,
-        "total_annual_economic_impact_rub": total_annual_economic_impact_rub
+        "api_cost_rub": 0.0
     }
 
 def print_pure_ai_agent_roi_report(roi):
     print("=" * 75)
-    print("⚡ TELE2 B2B PURE RULE-BASED AUDITOR ROI (0 API COST / 100% DETERMINISTIC)")
+    print("⚡ TELE2 B2B RULE-BASED AUDITOR: ФАКТИЧЕСКИЙ ОПЕРАЦИОННЫЙ ЭФФЕКТ")
     print("=" * 75)
-    print(f"Общая выборка оттока B2B            : {roi['monthly_churn_population']:,} клиентов/мес")
-    print(f"Затраты на ручной обзвон (без аудитора): {roi['total_manual_fot_cost_rub']:,.2f} ₽/мес")
+    print(f"Входной поток диалогов 'серая зона'  : {roi['dataset_size']:,} звонков/мес")
+    print(f"Лимит мощности колл-центра / операторов: {roi['call_center_capacity']:,} звонков/мес")
     print("-" * 75)
-    print(f"⚡ Автономно обработано правилами  : {roi['calls_handled_by_rules']:,.0f} звонков/мес (85%)")
-    print(f"👤 Передано персональным менеджерам : {roi['calls_handled_by_human']:,.0f} VIP-кейсов/мес (15%)")
-    print(f"⏱ Сбережено рабочего времени        : {roi['hours_saved_by_rules']:,.1f} чел-часов/мес")
-    print(f"💰 Прямая экономия на ФОТ           : {roi['monthly_fot_savings_rub']:,.2f} ₽/мес ({roi['annual_fot_savings_rub']:,.2f} ₽/год)")
-    print(f"💳 Затраты на API / нейросети        : 0.00 ₽ (100% Локальный Python Engine)")
-    print("-" * 75)
-    print(f"Спасенных B2B-аккаунтов (Recall S4) : ~{roi['salvaged_b2b_accounts_monthly']:,.0f} аккаунтов/мес")
-    print(f"📈 Сбереженная выручка MRR (ARPU)   : {roi['monthly_salvaged_mrr_rub']:,.2f} ₽/мес ({roi['annual_salvaged_revenue_rub']:,.2f} ₽/год)")
-    print("=" * 75)
-    print(f"🔥 ПОЛНЫЙ ЭКОНОМИЧЕСКИЙ ЭФФЕКТ: {roi['total_monthly_economic_impact_rub']:,.2f} ₽ / МЕСЯЦ ({roi['total_annual_economic_impact_rub']:,.2f} ₽ / ГОД)")
+    print(f"📞 Отправлено операторам (S2 + S4) : {roi['selected_calls_monthly']:,} целевых звонков (44.3%)")
+    print(f"⚡ Автономно отсеяно правилами (S1 + S3): {roi['filtered_calls_monthly']:,} звонков/мес (55.7%)")
+    print(f"⏱ Сбережено рабочего времени        : {roi['hours_saved_monthly']:,.1f} чел-часов/мес")
+    print(f"💰 Прямая экономия ФОТ операторов   : {roi['monthly_fot_savings_rub']:,.2f} ₽/мес ({roi['annual_fot_savings_rub']:,.2f} ₽/год)")
+    print(f"💳 Затраты на нейросети / API        : 0.00 ₽ (100% Локальный Python Rule Engine)")
     print("=" * 75 + "\n")
 
 if __name__ == "__main__":
