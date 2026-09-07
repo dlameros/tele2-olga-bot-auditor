@@ -84,12 +84,40 @@ def print_evaluation_report(title, results):
     print(results['confusion_matrix'])
     print("=" * 70 + "\n")
 
+def print_comparative_summary(bot_results, llm_results):
+    print("=" * 70)
+    print("🚀 AUDITOR VS BASELINE BOT 'OLGA' SUMMARY COMPARISON")
+    print("=" * 70)
+    print(f"{'Metric':<35} {'Bot Olga':<15} {'Hybrid Auditor':<15} {'Delta / Gain':<15}")
+    print("-" * 75)
+    
+    acc_bot = bot_results['accuracy'] * 100
+    acc_llm = llm_results['accuracy'] * 100
+    print(f"{'Accuracy (Overall)':<35} {acc_bot:.2f}%{'':<8} {acc_llm:.2f}%{'':<8} {acc_llm - acc_bot:+.2f}%")
+    
+    err_bot = bot_results['error_rate'] * 100
+    err_llm = llm_results['error_rate'] * 100
+    print(f"{'Error Rate':<35} {err_bot:.2f}%{'':<8} {err_llm:.2f}%{'':<8} {err_llm - err_bot:+.2f}%")
+
+    f1_bot = bot_results['macro_f1']
+    f1_llm = llm_results['macro_f1']
+    print(f"{'Macro F1-Score':<35} {f1_bot:.4f}{'':<9} {f1_llm:.4f}{'':<9} {f1_llm - f1_bot:+.4f}")
+
+    p2_bot = bot_results['per_class'][2]['precision'] * 100
+    p2_llm = llm_results['per_class'][2]['precision'] * 100
+    print(f"{'Precision (Churn Confirmed S2)':<35} {p2_bot:.1f}%{'':<9} {p2_llm:.1f}%{'':<9} {p2_llm - p2_bot:+.1f}%")
+
+    r4_bot = bot_results['per_class'][4]['recall'] * 100
+    r4_llm = llm_results['per_class'][4]['recall'] * 100
+    print(f"{'Recall (Manager Request S4)':<35} {r4_bot:.1f}%{'':<9} {r4_llm:.1f}%{'':<9} {r4_llm - r4_bot:+.1f}%")
+    print("=" * 70 + "\n")
+
 def run_evaluation(test_csv="318_test.csv"):
     if not os.path.exists(test_csv):
         print(f"❌ Benchmark file {test_csv} not found.")
         return
         
-    df = pd.read_csv(test_csv)
+    df = pd.read_csv(test_csv, encoding="utf-8")
     
     # 1. Evaluate baseline Bot "Olga" status vs true_status
     y_true = df["true_status"].values
@@ -98,15 +126,23 @@ def run_evaluation(test_csv="318_test.csv"):
     bot_results = evaluate_predictions(y_true, y_bot)
     print_evaluation_report("Baseline Evaluation: Bot 'Olga' vs Ground Truth", bot_results)
     
-    # 2. Evaluate LLM status if available
+    # 2. Evaluate LLM / Pipeline status if available
+    llm_results = None
     if "llm_status" in df.columns and df["llm_status"].notna().any():
         df_llm_eval = df[df["llm_status"].notna()]
         y_true_llm = df_llm_eval["true_status"].values
         y_pred_llm = df_llm_eval["llm_status"].astype(int).values
         llm_results = evaluate_predictions(y_true_llm, y_pred_llm)
         print_evaluation_report("Hybrid Auditor (Rule + LLM) vs Ground Truth", llm_results)
-    
-    return bot_results
+        
+        print_comparative_summary(bot_results, llm_results)
+        
+        # 3. Compute Business ROI
+        from business_metrics import calculate_business_roi, print_business_roi_report
+        roi = calculate_business_roi(hybrid_eval_results=llm_results)
+        print_business_roi_report(roi)
+
+    return bot_results, llm_results
 
 if __name__ == "__main__":
     run_evaluation()

@@ -30,8 +30,12 @@ subprocess.run([sys.executable, "script_5.py"])
 # Запуск script_6_llm.py (LLM Fallback Classification)
 subprocess.run([sys.executable, "script_6_llm.py"])
 
-# Запуск eval_metrics.py (Benchmark Evaluation & Error Analysis)
-print("\n📊 Running final benchmark evaluation...")
+# Запуск eval_pipeline.py (Full Multi-Stage Benchmark Evaluator)
+print("\n🧪 Running full multi-stage benchmark pipeline evaluation...")
+subprocess.run([sys.executable, "eval_pipeline.py"])
+
+# Запуск eval_metrics.py (Benchmark Evaluation & Error Analysis & Business ROI)
+print("\n📊 Running final benchmark evaluation & Business ROI report...")
 subprocess.run([sys.executable, "eval_metrics.py"])
 
-print("\n✨ Pipeline execution complete! Audit artifacts and metrics ready.")
+print("\n✨ Pipeline execution complete! Audit artifacts, ML metrics, and Business ROI ready.")

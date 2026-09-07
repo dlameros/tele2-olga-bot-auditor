@@ -76,13 +76,22 @@ def has_usage_signals(text):
     if not isinstance(text, str):
         return False
     t = text.lower()
-    return any(verb in t for verb in [
+    
+    verbs = [
         "пользуюсь", "пользуемся", "пользуется", "пользуются",
-        "планирую", "планируем", "планирует",
-        "продолжаю", "продолжаем", "остаюсь", "остаёмся",
-        "активен", "активны", "работает", "работают",
+        "планирую", "планируем", "планирует", "продолжаю", "продолжаем",
+        "остаюсь", "остаёмся", "активен", "активны", "работает", "работают",
         "sim в", "в оборудовании", "в устройстве"
-    ])
+    ]
+    
+    for verb in verbs:
+        if verb in t:
+            # Check for negation preceding verb ("не пользуемся", "не планируем")
+            neg_match = re.search(r'(не|нет)\s+([a-zа-яё]+\s+){0,2}' + re.escape(verb), t)
+            if neg_match:
+                return False
+            return True
+    return False
 
 def extract_human_replies_raw(transcript):
     if pd.isna(transcript):
