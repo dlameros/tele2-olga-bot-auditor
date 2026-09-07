@@ -34,8 +34,12 @@ subprocess.run([sys.executable, "script_6_llm.py"])
 print("\n🧪 Running full multi-stage benchmark pipeline evaluation...")
 subprocess.run([sys.executable, "eval_pipeline.py"])
 
+# Запуск eval_comparison.py (3-Way Comparison: Ground Truth vs Olga vs AI)
+print("\n📊 Running 3-Way Benchmark Comparison & Operational Selection analysis...")
+subprocess.run([sys.executable, "eval_comparison.py"])
+
 # Запуск eval_metrics.py (Benchmark Evaluation & Error Analysis & Business ROI)
-print("\n📊 Running final benchmark evaluation & Business ROI report...")
+print("\n💼 Running final benchmark evaluation & Autonomous AI ROI report...")
 subprocess.run([sys.executable, "eval_metrics.py"])
 
 print("\n✨ Pipeline execution complete! Audit artifacts, ML metrics, and Business ROI ready.")
