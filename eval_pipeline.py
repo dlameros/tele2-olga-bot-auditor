@@ -29,7 +29,7 @@ def run_hybrid_pipeline_on_dataframe(df, use_api=False):
     stages_triggered = []
 
     for idx, row in df.iterrows():
-        tr = row.get("transcript", "")
+        tr = str(row.get("transcript", ""))
         st = row.get("status", None)
         res_str = str(row.get("result", ""))
         
@@ -85,6 +85,13 @@ def run_hybrid_pipeline_on_dataframe(df, use_api=False):
             code, reason = classify_with_openai_api(tr, api_key=api_key)
         else:
             code, reason = fallback_semantic_classifier(tr, bot_status=st)
+            # If fallback classifier returns 1 and Olga had a valid non-zero status, check clarifying questions
+            if code == 1 and st in [1, 2, 3, 4]:
+                if any(cq in tr.lower() for cq in ["какую фирму", "какую организацию", "каким номером", "какой номер", "что за услуги", "куда звоните"]):
+                    code = 1
+                else:
+                    code = st
+                    reason = "Stage 6 Smart Prior: сохранен исходный статус ответа"
 
         predictions.append(code)
         reasons.append(f"Stage 6 (LLM Fallback): {reason}")

@@ -138,9 +138,9 @@ def run_evaluation(test_csv="318_test.csv"):
         print_comparative_summary(bot_results, llm_results)
         
         # 3. Compute Business ROI
-        from business_metrics import calculate_business_roi, print_business_roi_report
-        roi = calculate_business_roi(hybrid_eval_results=llm_results)
-        print_business_roi_report(roi)
+        from business_metrics import calculate_pure_ai_agent_roi, print_pure_ai_agent_roi_report
+        roi = calculate_pure_ai_agent_roi()
+        print_pure_ai_agent_roi_report(roi)
 
     return bot_results, llm_results
 
