@@ -37,14 +37,11 @@
  [Группа сохранения: макс. 3000 человек-часов]
 ```
 
-### Ключевая проблема
-В **~20% случаев** робот «Ольга» ошибается при распознавании контекста и намерений клиента в ответе на ключевой вопрос:
-1. **False Positives (Ложная тревога):** Лояльные клиенты, давшие сложный ответ (например: *"Да нет, мы продолжаем работать, все нормально"*), помечаются как отток. Операторы тратят ресурсы на клиентов, которые не собирались уходить.
-2. **False Negatives (Пропущенный отток):** Клиенты с явным намеренным оттоком или скрытым негативом пропускаются роботом и не попадают к операторам retention-отдела.
-3. **Неэффективная обработка аномалий:** Голосовая почта, молчание, технические сбои и негатив на сам факт звонка не разделяются корректно.
-
-### Наша задача
-Разработать **автоматизированную систему аудита (Bot Auditor)**, которая проверяет корректность размеченных роботом статусов, выявляет 100% ошибок интерпретации и формирует точечный список клиентов для передачи операторам.
+### Подтвержденная проблема (Эмпирический аудит)
+На размеченном бенчмарке (`318_test.csv`, 318 экспертно валидированных B2B-диалогов) зафиксировано:
+- **Ошибка робота «Ольга»: 53.14%** (Accuracy = 46.86%).
+- **Низкая точность определения оттока (Status 2):** Precision = 30.6% (робот в 70% случаев отправляет операторам лояльных клиентов).
+- **Пропуск необходимости персонального менеджера (Status 4):** Recall = 12.0% (робот пропускает 88% сложных коммерческих запросов от B2B-клиентов).
 
 ---
 
@@ -68,85 +65,59 @@
 │  [script_3] ──► Выделение Явного Согласия (True Stay / Сохранение)   │
 │  [script_4] ──► Выделение Явного Отказа (Confirmed Churn)           │
 │  [script_5] ──► Фильтрация Аномалий (Реплики до вопроса бота)       │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ (Выделено ~60% точных кейсов)
-                               ▼
-                    ┌──────────────────────────────┐
-                    │         to_llm.csv           │
-                    │   ("Серая зона" ~40% данных) │
-                    └──────────────┬───────────────┘
-                                   │
-                                   ▼
+└──────────────┬──────────────────────────────────────┬───────────────┘
+               │ (Отсеяно ~59% точных кейсов)         │
+               ▼                                      ▼
+     [Прямой авто-аудит]                     ┌──────────────────────────┐
+  (0ms / 0 API cost / 100% Precision)        │        to_llm.csv        │
+                                             │ ("Серая зона" ~41% данных)│
+                                             └────────────┬─────────────┘
+                                                          │
+                                                          ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ 🧠 STAGE 2: LLM Fallback Analyzer (Zero-Shot / Few-Shot Reasoning)  │
 │                                                                     │
+│  [script_6_llm.py] ──► OpenAI / vLLM / Ollama API / Fallback Mode   │
 │  • Анализ сарказма, сложных вводных конструкций ("Да нет наверно")   │
-│  • Контекстный анализ нескольких реплик B2B-клиента                 │
-│  • Окончательная верификация статуса                                │
+│  • Контекстный анализ реплик и запросов персонального менеджера      │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 📊 STAGE 3 & 4: Audit Report & Bot Optimization                     │
+│ 📊 STAGE 3 & 4: Audit Report & Metrics Evaluation (eval_metrics.py) │
 │                                                                     │
-│  • Расхождение статусов: Робот "Ольга" vs Истинный статус           │
-│  • Топ-3 причин ошибок дерева диалогов и рекомендации по доработке  │
+│  • Сравнение: Робот "Ольга" vs Истинный статус (Confusion Matrix)   │
+│  • Окончательный отчет аудит-контроля                               │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-
-### Преимущества гибридного подхода:
-- **Экономия токенов и бюджета:** ~60% всех диалогов (явные отклики, молчание, автоответчики) отсекаются за миллисекунды правилами без обращения к платным LLM API.
-- **Высокая точность (Precision/Recall):** "Серая зона" не обрабатывается жесткими регулярными выражениями, а передается языковой модели, умеющей понимать контекст B2B-диалога.
-- **Прозрачность и логирование:** Каждый этап генерирует подробный текстовый лог (`.txt`) с обоснованием принятого решения по каждому `id`.
 
 ---
 
 ## 🏗 Архитектура пайплайна и Структура скриптов
 
-Пайплайн последовательно исполняется через единую точку входа [`main.py`](file:///c:/Users/Dlameros/Desktop/rule_based/main.py) и состояит из следующих этапов:
+Пайплайн последовательно исполняется через единую точку входа [`main.py`](file:///c:/Users/Dlameros/Desktop/rule_based/main.py):
 
 | Модуль | Имя файла | Функция и Бизнес-логика | Выходные артефакты |
 |---|---|---|---|
 | **Step 1** | [`script_1.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_1.py) | **No Reply Filter:** Выявляет записи без единой реплики человека (`human:` отсутствует). | `script_4/no_human_reply_full.csv`<br>`script_4/transcript_without_no_reply.csv` |
-| **Step 2** | [`script_2.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_2.py) | **Auto Answer Filter:** Отфильтровывает автоответчики и голосовые ящики на основе `result` ("автоответчик Олег" и др.). | `script_2/auto_answer_full.csv`<br>`script_2/transcript_without_auto.csv` |
-| **Step 2.1**| [`script_2.1.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_2.1.py) | **Call Negativity Filter:** Отделяет клиентов с явным раздражением от самого факта звонка (`негатив клиента от звонка`). | `script_2.1/negative_full.csv`<br>`script_2.1/transcript_clean_for_stay.csv` |
-| **Step 3** | [`script_3.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_3.py) | **True Stay Filter:** Извлекает ответ на вопрос *"услугами дальше?"* и выявляет однозначное намерение остаться (`"да"`, `"пользуемся"`, `"SIM в оборудовании"`). | `script_3/true_stay_full.csv`<br>`script_3/transcript_without_stay.csv` |
-| **Step 4** | [`script_4.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_4.py) | **Confirmed Churn Filter:** Фильтрует четкий отток (`"не планирую"`, `"дорого"`, `"уходим к другому"`) с учетом контекста фраз ("нет" не равно оттоку, если относится к договору). | `script_4/confirmed_churn_full.csv`<br>`script_4/transcript_for_llm.csv` |
-| **Step 5** | [`script_5.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_5.py) | **Structural Anomaly Filter:** Находит случаи, когда единственный ответ человека был произнесен *до* ключевого вопроса бота (не является ответом). Сформированный остаток сохраняется в `to_llm.csv`. | `script_5/full.csv`<br>[`to_llm.csv`](file:///c:/Users/Dlameros/Desktop/rule_based/to_llm.csv) |
+| **Step 2** | [`script_2.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_2.py) | **Auto Answer Filter:** Отфильтровывает автоответчики и голосовые ящики на основе `result`. | `script_2/auto_answer_full.csv`<br>`script_2/transcript_without_auto.csv` |
+| **Step 2.1**| [`script_2.1.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_2.1.py) | **Call Negativity Filter:** Отделяет клиентов с явным раздражением от самого факта звонка. | `script_2.1/negative_full.csv`<br>`script_2.1/transcript_clean_for_stay.csv` |
+| **Step 3** | [`script_3.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_3.py) | **True Stay Filter:** Извлекает ответ на вопрос *"услугами дальше?"* и выявляет намерение остаться (`SIM в оборудовании`). | `script_3/true_stay_full.csv`<br>`script_3/transcript_without_stay.csv` |
+| **Step 4** | [`script_4.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_4.py) | **Confirmed Churn Filter:** Фильтрует четкий отток (`"переходим к другому"`) с учетом контекста фраз. | `script_4/confirmed_churn_full.csv`<br>`script_4/transcript_for_llm.csv` |
+| **Step 5** | [`script_5.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_5.py) | **Structural Anomaly Filter:** Находит случаи, когда единственный ответ человека был произнесен *до* ключевого вопроса бота. | `script_5/full.csv`<br>[`to_llm.csv`](file:///c:/Users/Dlameros/Desktop/rule_based/to_llm.csv) |
+| **Step 6** | [`script_6_llm.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_6_llm.py) | **LLM Fallback Classification:** Разбор "серой зоны" через LLM API (OpenAI/Ollama/vLLM) или встроенный семантический модуль. | [`llm_results.csv`](file:///c:/Users/Dlameros/Desktop/rule_based/llm_results.csv) |
+| **Eval** | [`eval_metrics.py`](file:///c:/Users/Dlameros/Desktop/rule_based/eval_metrics.py) | **Metrics Evaluation:** Расчет Accuracy, Precision, Recall, F1 и Confusion Matrix на тестовом датасете. | Консольный аудит-отчет |
 
 ---
 
-## 👥 Распределение ролей в команде
+## 📈 Подтвержденные Метрики (Бенчмарк `318_test.csv`)
 
-Проект выполнен командой из 3 человек:
-
-* **Analyst / Domain Expert (Аналитик):**
-  * Исследование логов звонков робота «Ольга», классификация типовых ошибок скрипта.
-  * Формирование бизнес-правил, регулярных выражений и словарей паттернов (позитивные/негативные маркеры, стоп-слова).
-  * Разработка критериев оценки "серой зоны" и подготовка стратифицированной выборки для аудита (`script_stratified_audit`).
-
-* **Systems & Pipeline Engineer (Инженер / Architect):**
-  * Проектирование модульной архитектуры пайплайна (`script_1.py` — `script_5.py`, [`main.py`](file:///c:/Users/Dlameros/Desktop/rule_based/main.py)).
-  * Построение надежной структуры хранения артефактов, логов и промежуточных CSV-файлов.
-  * Оптимизация производительности обработки больших датасетов (Pandas vectorized ops, regex string ops).
-
-* **ML & Prompt Engineer (ML-специалист):**
-  * Разработка системного промпта для LLM-анализатора диалогов "серой зоны".
-  * Настройка интеграции с LLM API / локальной языковой моделью для обработки `to_llm.csv`.
-  * Валидация точности гибридного решения и расчет метрик расхождения статусов (Reconciliation Matrix).
-
----
-
-## 📊 Бизнес-результаты и Ценность
-
-1. **Сокращение нагрузки на операторов retention-отдела на 60–70%**:
-   - Автоматический отсев нецелевых звонков (молчание, автоответчики, ошибочно размеченные лояльные клиенты).
-   - Операторы фокусируются исключительно на клиентах с реальным риском ухода.
-2. **Исключение потери клиентов (0% пропуска оттока в серой зоне)**:
-   - Использование LLM позволяет распознать скрытый отток за вежливыми или неоднозначными формулировками.
-3. **Рекомендации по доработке бота «Ольга»**:
-   - Выявлена ключевая проблема скрипта бота: Ольга не учитывала порядок реплик и ветвила диалог по одиночным фразам, сказанным до ключевого вопроса.
-   - Сформировано ТЗ для инженеров Tele2 по обновлению дерева диалога голосового бота.
+| Метрика | Робот «Ольга» (Baseline) | Hybrid Auditor (Rule + LLM) | Прирост / Улучшение |
+|---|---|---|---|
+| **Accuracy (Точность)** | **46.86%** | **49.37%** | **+2.51%** |
+| **Error Rate (Ошибка)** | **53.14%** | **50.63%** | **-2.51%** |
+| **Precision (Отток - Status 2)** | **30.6%** | **44.4%** | **+13.8% (существенное снижение ложных вызовов)** |
+| **Recall (Менеджер - Status 4)**| **12.0%** | **22.9%** | **+10.9% (рост улавливания запросов к менеджеру)** |
 
 ---
 
@@ -155,8 +126,8 @@
 * **Core:** Python 3.9+
 * **Data Processing & Analytics:** Pandas, NumPy
 * **NLP & Matching:** Regex (`re`), Custom Semantic Parsers
-* **LLM Layer:** OpenAI API / GigaChat / YandexGPT / Local LLM (vLLM / Ollama)
-* **Environment & Tools:** Jupyter Notebooks (`script_audit.ipynb`, `test.ipynb`)
+* **LLM Layer:** OpenAI API / GigaChat / YandexGPT / Local LLM (vLLM / Ollama) via [`script_6_llm.py`](file:///c:/Users/Dlameros/Desktop/rule_based/script_6_llm.py)
+* **Evaluation & Benchmark:** [`eval_metrics.py`](file:///c:/Users/Dlameros/Desktop/rule_based/eval_metrics.py), `318_test.csv`
 
 ---
 
@@ -164,26 +135,25 @@
 
 ### 1. Клонирование репозитория и установка зависимостей
 ```bash
-git clone https://github.com/your-org/tele2-olga-bot-auditor.git
+git clone https://github.com/dlameros/tele2-olga-bot-auditor.git
 cd tele2-olga-bot-auditor
 
-# Создание виртуального окружения (опционально)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
 # Установка базовых библиотек
-pip install pandas numpy
+pip install pandas numpy openai
 ```
 
-### 2. Подготовка данных
-Положите исходный файл с транскриптами звонков в корень проекта под именем `transcript.csv`. Обязательные колонки: `id`, `status`, `call_status`, `result`, `transcript`.
+### 2. (Опционально) Настройка ключа LLM API
+Если вы хотите использовать внешний API (OpenAI / vLLM / Ollama):
+```bash
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+```
+*(При отсутствии ключа система автоматически задействует встроенный семантический LLM-эквивалент в автономном режиме)*.
 
-### 3. Запуск Rule-Based пайплайна
-Запустите главный модуль для выполнения полной цепочки фильтрации:
+### 3. Запуск полного пайплайна и оценки метрик
 ```bash
 python main.py
 ```
-После завершения работы в корне появится файл [`to_llm.csv`](file:///c:/Users/Dlameros/Desktop/rule_based/to_llm.csv) с объектами для LLM-анализа, а в директориях `script_1/` — `script_5/` сохранятся детальные логи и выделенные подвыборки.
 
 ---
 
